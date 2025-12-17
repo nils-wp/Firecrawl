@@ -6,7 +6,7 @@ services:
       - HOST=0.0.0.0
       - REDIS_URL=redis://redis:6379
       - REDIS_RATE_LIMIT_URL=redis://redis:6379
-      - PLAYWRIGHT_MICROSERVICE_URL=http://playwright-service:3000/scrape
+      # - PLAYWRIGHT_MICROSERVICE_URL=http://playwright-service:3000/scrape
       - USE_DB_AUTHENTICATION=false
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
@@ -22,8 +22,6 @@ services:
       nuq-postgres:
         condition: service_healthy
       redis:
-        condition: service_started
-      playwright-service:
         condition: service_started
     networks:
       - backend
@@ -52,14 +50,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-    restart: unless-stopped
-
-  playwright-service:
-    image: ghcr.io/firecrawl/firecrawl-playwright:latest
-    environment:
-      - PORT=3000
-    networks:
-      - backend
     restart: unless-stopped
 
 networks:
