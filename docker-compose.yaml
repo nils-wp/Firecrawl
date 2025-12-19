@@ -23,6 +23,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+    ports:
+      - "3002:3002"
     networks:
       - backend
     restart: unless-stopped
