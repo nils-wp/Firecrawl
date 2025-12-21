@@ -18,6 +18,7 @@ services:
       - 'OPENAI_BASE_URL=${OPENAI_BASE_URL}'
       - 'MODEL_NAME=${MODEL_NAME:-gpt-5-mini}'
       - BULL_AUTH_KEY=firecrawl-admin
+      - 'NUQ_RABBITMQ_URL=amqp://rabbitmq:5672'
     depends_on:
       nuq-postgres:
         condition: service_healthy
@@ -47,6 +48,7 @@ services:
       - 'OPENAI_API_KEY=${OPENAI_API_KEY}'
       - 'OPENAI_BASE_URL=${OPENAI_BASE_URL}'
       - 'MODEL_NAME=${MODEL_NAME:-gpt-5-mini}'
+      - 'NUQ_RABBITMQ_URL=amqp://rabbitmq:5672'
     command: ["node", "--max-old-space-size=8192", "dist/src/services/queue-worker.js"]
     depends_on:
       nuq-postgres:
@@ -62,6 +64,12 @@ services:
     networks:
       - backend
     command: 'redis-server --bind 0.0.0.0'
+    restart: unless-stopped
+
+  rabbitmq:
+    image: 'rabbitmq:3-alpine'
+    networks:
+      - backend
     restart: unless-stopped
 
   nuq-postgres:
