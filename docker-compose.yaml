@@ -19,9 +19,10 @@ services:
       - 'MODEL_NAME=${MODEL_NAME:-gpt-5-mini}'
       - BULL_AUTH_KEY=firecrawl-admin
       - 'NUQ_RABBITMQ_URL=amqp://rabbitmq:5672'
+      - 'RABBITMQ_URL=amqp://rabbitmq:5672'
     depends_on:
-      nuq-postgres:
-        condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
       redis:
         condition: service_started
     ports:
@@ -49,12 +50,16 @@ services:
       - 'OPENAI_BASE_URL=${OPENAI_BASE_URL}'
       - 'MODEL_NAME=${MODEL_NAME:-gpt-5-mini}'
       - 'NUQ_RABBITMQ_URL=amqp://rabbitmq:5672'
-    command: ["node", "--max-old-space-size=8192", "dist/src/services/queue-worker.js"]
+      - 'RABBITMQ_URL=amqp://rabbitmq:5672'
+      - BULL_AUTH_KEY=firecrawl-admin
+    command: ["pnpm", "run", "workers"]
     depends_on:
-      nuq-postgres:
-        condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
       redis:
         condition: service_started
+      rabbitmq:
+        condition: service_healthy
     networks:
       - backend
     restart: unless-stopped
@@ -70,6 +75,11 @@ services:
     image: 'rabbitmq:3-alpine'
     networks:
       - backend
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 10s
+      retries: 10
     restart: unless-stopped
 
   nuq-postgres:
@@ -79,8 +89,7 @@ services:
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_DB=postgres
     volumes:
-      - 'postgres-data:/var/lib/postgresql/data'
-      - './init-nuq.sql:/docker-entrypoint-initdb.d/01-init-nuq.sql:ro'
+      - 'firecrawl-postgres-data:/var/lib/postgresql/data'
     networks:
       - backend
     healthcheck:
@@ -92,8 +101,34 @@ services:
       retries: 10
     restart: unless-stopped
 
+  db-init:
+    image: 'postgres:16-alpine'
+    environment:
+      - PGPASSWORD=postgres
+    depends_on:
+      nuq-postgres:
+        condition: service_healthy
+    networks:
+      - backend
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        until pg_isready -h nuq-postgres -U postgres; do sleep 1; done
+        psql -h nuq-postgres -U postgres -d postgres <<'EOSQL'
+        CREATE EXTENSION IF NOT EXISTS pgcrypto;
+        CREATE SCHEMA IF NOT EXISTS nuq;
+        DO $$ BEGIN CREATE TYPE nuq.job_status AS ENUM ('queued', 'active', 'completed', 'failed', 'cancelled'); EXCEPTION WHEN duplicate_object THEN null; END $$;
+        CREATE TABLE IF NOT EXISTS nuq.group_crawl (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), name TEXT, owner_id TEXT, status TEXT DEFAULT 'pending', created_at TIMESTAMP DEFAULT NOW(), finished_at TIMESTAMP, expires_at TIMESTAMP, ttl INTEGER, options JSONB, scrape_options JSONB, internal_options JSONB, total_count INTEGER DEFAULT 0, completed_count INTEGER DEFAULT 0, credits_used INTEGER DEFAULT 0);
+        CREATE TABLE IF NOT EXISTS nuq.queue_item (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), group_id uuid REFERENCES nuq.group_crawl(id) ON DELETE CASCADE, url TEXT NOT NULL, status nuq.job_status DEFAULT 'queued', priority INTEGER DEFAULT 0, data JSONB, created_at TIMESTAMP DEFAULT NOW(), finished_at TIMESTAMP, listen_channel_id TEXT, returnvalue JSONB, failedreason TEXT, lock uuid, locked_at TIMESTAMP, owner_id TEXT);
+        CREATE TABLE IF NOT EXISTS nuq.queue_scrape (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), group_id uuid REFERENCES nuq.group_crawl(id) ON DELETE CASCADE, url TEXT NOT NULL, status nuq.job_status DEFAULT 'queued', priority INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT NOW(), times_out_at TIMESTAMP, owner_id TEXT, data JSONB, finished_at TIMESTAMP, returnvalue JSONB, failedreason TEXT, lock uuid, locked_at TIMESTAMP, listen_channel_id TEXT);
+        CREATE TABLE IF NOT EXISTS nuq.queue_scrape_backlog (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), group_id uuid REFERENCES nuq.group_crawl(id) ON DELETE CASCADE, owner_id TEXT, url TEXT NOT NULL, status nuq.job_status DEFAULT 'queued', priority INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT NOW(), data JSONB);
+        CREATE TABLE IF NOT EXISTS nuq.queue_scrape_group_concurrency (group_id uuid PRIMARY KEY REFERENCES nuq.group_crawl(id) ON DELETE CASCADE, current_concurrency INTEGER DEFAULT 0);
+        CREATE TABLE IF NOT EXISTS nuq.queue_crawl_finished (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), group_id uuid REFERENCES nuq.group_crawl(id) ON DELETE CASCADE, url TEXT, status nuq.job_status DEFAULT 'queued', priority INTEGER DEFAULT 0, data JSONB, created_at TIMESTAMP DEFAULT NOW(), finished_at TIMESTAMP, listen_channel_id TEXT, returnvalue JSONB, failedreason TEXT, lock uuid, locked_at TIMESTAMP, owner_id TEXT);
+        EOSQL
+    restart: "no"
+
 networks:
   backend:
 
 volumes:
-  postgres-data:
+  firecrawl-postgres-data:
