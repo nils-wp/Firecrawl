@@ -97,22 +97,15 @@ services:
     command:
       - |
         until pg_isready -h nuq-postgres -U postgres; do sleep 1; done
-        psql -h nuq-postgres -U postgres -d postgres <<'EOSQL'
-        CREATE EXTENSION IF NOT EXISTS pgcrypto;
-        CREATE SCHEMA IF NOT EXISTS nuq;
-        DO \$body\$
-        BEGIN
-          CREATE TYPE nuq.job_status AS ENUM ('queued', 'active', 'completed', 'failed', 'cancelled');
-        EXCEPTION
-          WHEN duplicate_object THEN NULL;
-        END \$body\$;
-        CREATE TABLE IF NOT EXISTS nuq.group_crawl (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), name TEXT, owner_id TEXT, status TEXT DEFAULT 'pending', created_at TIMESTAMP DEFAULT NOW(), finished_at TIMESTAMP, expires_at TIMESTAMP, ttl INTEGER, options JSONB, scrape_options JSONB, internal_options JSONB, total_count INTEGER DEFAULT 0, completed_count INTEGER DEFAULT 0, credits_used INTEGER DEFAULT 0);
-        CREATE TABLE IF NOT EXISTS nuq.queue_item (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), group_id uuid REFERENCES nuq.group_crawl(id) ON DELETE CASCADE, url TEXT, status nuq.job_status DEFAULT 'queued', priority INTEGER DEFAULT 0, data JSONB, created_at TIMESTAMP DEFAULT NOW(), finished_at TIMESTAMP, listen_channel_id TEXT, returnvalue JSONB, failedreason TEXT, lock uuid, locked_at TIMESTAMP, owner_id TEXT);
-        CREATE TABLE IF NOT EXISTS nuq.queue_scrape (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), group_id uuid REFERENCES nuq.group_crawl(id) ON DELETE CASCADE, url TEXT, status nuq.job_status DEFAULT 'queued', priority INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT NOW(), times_out_at TIMESTAMP, owner_id TEXT, data JSONB, finished_at TIMESTAMP, returnvalue JSONB, failedreason TEXT, lock uuid, locked_at TIMESTAMP, listen_channel_id TEXT);
-        CREATE TABLE IF NOT EXISTS nuq.queue_scrape_backlog (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), group_id uuid REFERENCES nuq.group_crawl(id) ON DELETE CASCADE, owner_id TEXT, url TEXT, status nuq.job_status DEFAULT 'queued', priority INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT NOW(), data JSONB);
-        CREATE TABLE IF NOT EXISTS nuq.queue_scrape_group_concurrency (group_id uuid PRIMARY KEY REFERENCES nuq.group_crawl(id) ON DELETE CASCADE, current_concurrency INTEGER DEFAULT 0);
-        CREATE TABLE IF NOT EXISTS nuq.queue_crawl_finished (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), group_id uuid REFERENCES nuq.group_crawl(id) ON DELETE CASCADE, url TEXT, status nuq.job_status DEFAULT 'queued', priority INTEGER DEFAULT 0, data JSONB, created_at TIMESTAMP DEFAULT NOW(), finished_at TIMESTAMP, listen_channel_id TEXT, returnvalue JSONB, failedreason TEXT, lock uuid, locked_at TIMESTAMP, owner_id TEXT);
-        EOSQL
+        psql -h nuq-postgres -U postgres -d postgres -c "CREATE EXTENSION IF NOT EXISTS pgcrypto"
+        psql -h nuq-postgres -U postgres -d postgres -c "CREATE SCHEMA IF NOT EXISTS nuq"
+        psql -h nuq-postgres -U postgres -d postgres -c "CREATE TYPE nuq.job_status AS ENUM ('queued', 'active', 'completed', 'failed', 'cancelled')" 2>/dev/null || true
+        psql -h nuq-postgres -U postgres -d postgres -c "CREATE TABLE IF NOT EXISTS nuq.group_crawl (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), name TEXT, owner_id TEXT, status TEXT DEFAULT 'pending', created_at TIMESTAMP DEFAULT NOW(), finished_at TIMESTAMP, expires_at TIMESTAMP, ttl INTEGER, options JSONB, scrape_options JSONB, internal_options JSONB, total_count INTEGER DEFAULT 0, completed_count INTEGER DEFAULT 0, credits_used INTEGER DEFAULT 0)"
+        psql -h nuq-postgres -U postgres -d postgres -c "CREATE TABLE IF NOT EXISTS nuq.queue_item (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), group_id uuid REFERENCES nuq.group_crawl(id) ON DELETE CASCADE, url TEXT, status nuq.job_status DEFAULT 'queued', priority INTEGER DEFAULT 0, data JSONB, created_at TIMESTAMP DEFAULT NOW(), finished_at TIMESTAMP, listen_channel_id TEXT, returnvalue JSONB, failedreason TEXT, lock uuid, locked_at TIMESTAMP, owner_id TEXT)"
+        psql -h nuq-postgres -U postgres -d postgres -c "CREATE TABLE IF NOT EXISTS nuq.queue_scrape (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), group_id uuid REFERENCES nuq.group_crawl(id) ON DELETE CASCADE, url TEXT, status nuq.job_status DEFAULT 'queued', priority INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT NOW(), times_out_at TIMESTAMP, owner_id TEXT, data JSONB, finished_at TIMESTAMP, returnvalue JSONB, failedreason TEXT, lock uuid, locked_at TIMESTAMP, listen_channel_id TEXT)"
+        psql -h nuq-postgres -U postgres -d postgres -c "CREATE TABLE IF NOT EXISTS nuq.queue_scrape_backlog (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), group_id uuid REFERENCES nuq.group_crawl(id) ON DELETE CASCADE, owner_id TEXT, url TEXT, status nuq.job_status DEFAULT 'queued', priority INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT NOW(), data JSONB)"
+        psql -h nuq-postgres -U postgres -d postgres -c "CREATE TABLE IF NOT EXISTS nuq.queue_scrape_group_concurrency (group_id uuid PRIMARY KEY REFERENCES nuq.group_crawl(id) ON DELETE CASCADE, current_concurrency INTEGER DEFAULT 0)"
+        psql -h nuq-postgres -U postgres -d postgres -c "CREATE TABLE IF NOT EXISTS nuq.queue_crawl_finished (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), group_id uuid REFERENCES nuq.group_crawl(id) ON DELETE CASCADE, url TEXT, status nuq.job_status DEFAULT 'queued', priority INTEGER DEFAULT 0, data JSONB, created_at TIMESTAMP DEFAULT NOW(), finished_at TIMESTAMP, listen_channel_id TEXT, returnvalue JSONB, failedreason TEXT, lock uuid, locked_at TIMESTAMP, owner_id TEXT)"
     restart: "no"
 
 networks:
