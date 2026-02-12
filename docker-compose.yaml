@@ -1,6 +1,6 @@
 services:
-  api:
-    image: 'ghcr.io/firecrawl/firecrawl:latest'
+  firecrawl:
+    image: 'ghcr.io/firecrawl/firecrawl:v2.8.0'
     environment:
       - PORT=3002
       - HOST=0.0.0.0
@@ -16,43 +16,12 @@ services:
       - NUM_WORKERS_PER_QUEUE=8
       - 'OPENAI_API_KEY=${OPENAI_API_KEY}'
       - 'OPENAI_BASE_URL=${OPENAI_BASE_URL}'
-      - 'MODEL_NAME=${MODEL_NAME:-gpt-5-mini}'
+      - 'MODEL_NAME=${MODEL_NAME:-gpt-4o-mini}'
       - BULL_AUTH_KEY=firecrawl-admin
       - 'NUQ_RABBITMQ_URL=amqp://rabbitmq:5672'
       - 'RABBITMQ_URL=amqp://rabbitmq:5672'
-    depends_on:
-      db-init:
-        condition: service_completed_successfully
-      redis:
-        condition: service_started
-    ports:
-      - '3002:3002'
-    networks:
-      - backend
-    restart: unless-stopped
-
-  worker:
-    image: 'ghcr.io/firecrawl/firecrawl:latest'
-    environment:
-      - PORT=3002
-      - HOST=0.0.0.0
-      - 'REDIS_URL=redis://redis:6379'
-      - 'REDIS_RATE_LIMIT_URL=redis://redis:6379'
-      - USE_DB_AUTHENTICATION=false
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=postgres
-      - POSTGRES_HOST=nuq-postgres
-      - POSTGRES_PORT=5432
-      - 'NUQ_DATABASE_URL=postgres://postgres:postgres@nuq-postgres:5432/postgres'
-      - NUM_WORKERS_PER_QUEUE=8
-      - 'OPENAI_API_KEY=${OPENAI_API_KEY}'
-      - 'OPENAI_BASE_URL=${OPENAI_BASE_URL}'
-      - 'MODEL_NAME=${MODEL_NAME:-gpt-5-mini}'
-      - 'NUQ_RABBITMQ_URL=amqp://rabbitmq:5672'
-      - 'RABBITMQ_URL=amqp://rabbitmq:5672'
-      - BULL_AUTH_KEY=firecrawl-admin
-    command: ["pnpm", "run", "workers"]
+      - 'PLAYWRIGHT_MICROSERVICE_URL=http://playwright:3000'
+    command: ["node", "dist/src/harness.js", "--start-docker"]
     depends_on:
       db-init:
         condition: service_completed_successfully
@@ -60,6 +29,20 @@ services:
         condition: service_started
       rabbitmq:
         condition: service_healthy
+      playwright:
+        condition: service_started
+    ports:
+      - '3002:3002'
+    networks:
+      - backend
+    restart: unless-stopped
+
+  playwright:
+    image: 'ghcr.io/firecrawl/playwright-service:v2.8.0'
+    environment:
+      - PORT=3000
+      - PROXY_SERVER=${PROXY_SERVER:-}
+      - BLOCK_MEDIA=${BLOCK_MEDIA:-false}
     networks:
       - backend
     restart: unless-stopped
