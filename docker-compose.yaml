@@ -38,7 +38,7 @@ services:
     restart: unless-stopped
 
   playwright:
-    image: 'ghcr.io/firecrawl/playwright-service:v2.8.0'
+    image: 'ghcr.io/firecrawl/playwright-service:latest'
     environment:
       - PORT=3000
       - PROXY_SERVER=${PROXY_SERVER:-}
