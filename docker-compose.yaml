@@ -1,6 +1,6 @@
 services:
   firecrawl:
-    image: 'ghcr.io/firecrawl/firecrawl:v2.8.0'
+    image: 'ghcr.io/firecrawl/firecrawl:latest'
     environment:
       - PORT=3002
       - HOST=0.0.0.0
